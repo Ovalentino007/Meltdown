@@ -9,7 +9,7 @@
 #include <ctype.h>
 
 #define CACHE_HIT 80  
-#define DUMP_SIZE 64  // Número de bytes a leer
+#define DUMP_SIZE 256 // Número de bytes a leer
 
 static sigjmp_buf bufaux;
 static char probe_array[256 * 4096];
