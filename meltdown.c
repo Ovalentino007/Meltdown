@@ -51,7 +51,7 @@ uint8_t meltdown(uint8_t *target_addr) {
         // Medimos los tiempos para ver qué índice ha sido cacheado
         for (int i = 0; i < 256; i++) {
             int time = measure_access_time(i);
-            if (time < CACHE_HIT_THRESHOLD) {
+            if (time < CACHE_HIT) {
                 return (uint8_t)i;
             }
         }
